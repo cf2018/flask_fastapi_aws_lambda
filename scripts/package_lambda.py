@@ -33,11 +33,31 @@ def clean():
     BUILD_DIR.mkdir(parents=True, exist_ok=True)
 
 
+def _pick_packaging_python() -> str:
+    """Pick the Python to use for pip installs into the Lambda package.
+
+    Prefer python3.12 to match the Lambda runtime; fall back to current interpreter.
+    """
+    candidates = [
+        os.environ.get("LAMBDA_PYTHON", "python3.12"),
+        sys.executable,
+    ]
+    for exe in candidates:
+        try:
+            subprocess.check_output([exe, "-V"])  # ensure it runs
+            return exe
+        except Exception:
+            continue
+    return sys.executable
+
+
 def install_deps(target_dir: Path):
     if not REQUIREMENTS.exists():
         print("requirements.txt not found; skipping deps install")
         return
-    run([sys.executable, "-m", "pip", "install", "-r", str(REQUIREMENTS), "-t", str(target_dir)])
+    py = _pick_packaging_python()
+    print(f"Installing dependencies with {py} to match Lambda runtime (python3.12)")
+    run([py, "-m", "pip", "install", "-r", str(REQUIREMENTS), "-t", str(target_dir)])
 
 
 def build_fastapi_zip():
