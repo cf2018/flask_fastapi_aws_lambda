@@ -16,6 +16,12 @@ variable "lambda_function_name" {
   default     = "fastapi_aws_lambda"
 }
 
+variable "flask_lambda_function_name" {
+  description = "Name of the Flask Lambda function"
+  type        = string
+  default     = "flask_aws_lambda"
+}
+
 variable "environment" {
   description = "Deployment environment (dev, staging, prod)"
   type        = string

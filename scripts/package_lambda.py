@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Package FastAPI + deps for AWS Lambda deployment.
+"""Package FastAPI and Flask lambdas + deps for AWS Lambda deployment.
 
 - Installs deps into a temporary dir
-- Copies app/ and handler.py
-- Zips into build/<LAMBDA_NAME>.zip
+- Copies sources and handler files
+- Zips into build/<name>.zip for both lambdas
 
 Requires: Python 3.11+, pip
 """
@@ -16,10 +16,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 BUILD_DIR = ROOT / "build"
-PACKAGE_DIR = BUILD_DIR / "package"
 REQUIREMENTS = ROOT / "requirements.txt"
-LAMBDA_NAME = os.getenv("LAMBDA_NAME", "fastapi_aws_lambda")
-OUTPUT_ZIP = BUILD_DIR / f"{LAMBDA_NAME}.zip"
+
+# Lambda package names
+FASTAPI_ZIP = BUILD_DIR / "fastapi_lambda.zip"
+FLASK_ZIP = BUILD_DIR / "flask_lambda.zip"
 
 
 def run(cmd: list[str]):
@@ -29,36 +30,54 @@ def run(cmd: list[str]):
 
 def clean():
     shutil.rmtree(BUILD_DIR, ignore_errors=True)
-    PACKAGE_DIR.mkdir(parents=True, exist_ok=True)
+    BUILD_DIR.mkdir(parents=True, exist_ok=True)
 
 
-def install_deps():
+def install_deps(target_dir: Path):
     if not REQUIREMENTS.exists():
         print("requirements.txt not found; skipping deps install")
         return
-    run([sys.executable, "-m", "pip", "install", "-r", str(REQUIREMENTS), "-t", str(PACKAGE_DIR)])
+    run([sys.executable, "-m", "pip", "install", "-r", str(REQUIREMENTS), "-t", str(target_dir)])
 
 
-def copy_source():
-    # Copy app/
-    shutil.copytree(ROOT / "app", PACKAGE_DIR / "app")
-    # Copy handler
-    shutil.copy2(ROOT / "handler.py", PACKAGE_DIR / "handler.py")
-    # Copy .env (optional for local/run; Lambda env comes from TF)
+def build_fastapi_zip():
+    package_dir = BUILD_DIR / "fastapi_package"
+    shutil.rmtree(package_dir, ignore_errors=True)
+    package_dir.mkdir(parents=True, exist_ok=True)
+
+    install_deps(package_dir)
+
+    # Copy FastAPI app and handler
+    shutil.copytree(ROOT / "app", package_dir / "app")
+    shutil.copy2(ROOT / "handler.py", package_dir / "handler.py")
     if (ROOT / ".env").exists():
-        shutil.copy2(ROOT / ".env", PACKAGE_DIR / ".env")
+        shutil.copy2(ROOT / ".env", package_dir / ".env")
+
+    shutil.make_archive(FASTAPI_ZIP.with_suffix(""), "zip", package_dir)
+    print(f"Built: {FASTAPI_ZIP}")
 
 
-def make_zip():
-    shutil.make_archive(OUTPUT_ZIP.with_suffix(""), "zip", PACKAGE_DIR)
+def build_flask_zip():
+    package_dir = BUILD_DIR / "flask_package"
+    shutil.rmtree(package_dir, ignore_errors=True)
+    package_dir.mkdir(parents=True, exist_ok=True)
+
+    install_deps(package_dir)
+
+    # Copy Flask app and handler
+    shutil.copytree(ROOT / "flask_app", package_dir / "flask_app")
+    shutil.copy2(ROOT / "flask_handler.py", package_dir / "flask_handler.py")
+    if (ROOT / ".env").exists():
+        shutil.copy2(ROOT / ".env", package_dir / ".env")
+
+    shutil.make_archive(FLASK_ZIP.with_suffix(""), "zip", package_dir)
+    print(f"Built: {FLASK_ZIP}")
 
 
 def main():
     clean()
-    install_deps()
-    copy_source()
-    make_zip()
-    print(f"Built: {OUTPUT_ZIP}")
+    build_fastapi_zip()
+    build_flask_zip()
 
 
 if __name__ == "__main__":
